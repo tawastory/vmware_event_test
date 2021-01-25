@@ -31,7 +31,8 @@ def event_callback(event):
       query = "INSERT INTO vmware_events(date, eventId, message) VALUES ("
       query = query + "'" + str(event.createdTime) + "',"
       query = query + "'" + event._wsdlName + "',"
-      query = query + "'" + event.fullFormattedMessage + "')"
+      message = event.fullFormattedMessage.replace("'", "")
+      query = query + "'" + message + "'" + ")"
       print(query)
 
       cur.execute(query)
