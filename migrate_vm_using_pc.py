@@ -17,32 +17,10 @@ def event_callback(event):
     print("%s,%s,%s" % (event._wsdlName,event.createdTime,event.fullFormattedMessage))
 
     try:
-      conn = pg2.connect(dbname='test', user='postgres', password='postgres', host='localhost')
-      cur = conn.cursor()
-
-      query = "INSERT INTO vmware_events(date, eventId, message) VALUES ("
-      query = query + "'" + str(event.createdTime) + "',"
-      query = query + "'" + event._wsdlName + "',"
-      message = event.fullFormattedMessage.replace("'", "")
-      query = query + "'" + message + "'" + ")"
-      print(query)
-
-      cur.execute(query)
-      conn.commit()
+      print("Test)
 
     except Exception as e:
       print(traceback.print_exc())
-
-      if conn:
-        conn.rollback()
-
-    finally:
-      if conn:
-        conn.close()
-
-
-
-
 
 def main():
 #    args = setup_args()
