@@ -4,6 +4,7 @@ import re
 import sys
 import datetime
 import traceback
+import csv
 
 from pyVmomi import vim, vmodl
 from pyVim.connect import SmartConnectNoSSL
@@ -11,6 +12,16 @@ import vmutils
 from pyVim.task import WaitForTask
 
 import psycopg2 as pg2
+
+targetList = None
+
+def read_csv_file():
+    try:
+        with open('target_list.csv', mode='r') as csv_file:
+            targetList = csv.DictReader(csv_file)
+
+    except Exception as e:
+        print(traceback.print_exc())
 
 def get_connection():
     si = SmartConnectNoSSL(host="vcenter.test.kr",
@@ -26,24 +37,31 @@ def event_callback(event):
         #print(event)
         si = get_connection()
 
-        if(event.vm.name == 'test-vm1'):
-            content = si.RetrieveContent()
-            vm = get_obj(content, [vim.VirtualMachine], event.vm.name)
+        print(type(event))
 
-            target_name = 'esx2.test.kr'
-            destination_host = get_obj(content, [vim.HostSystem], target_name)
-            managed_entity = get_obj(content, [vim.ManagedEntity], target_name)
-            resource_pool = managed_entity.resourcePool
-            migrate_priority = vim.VirtualMachine.MovePriority.defaultPriority
+        if(type(event) == vim.event.VmPoweredOffEvent):
+            if(event.vm.name == 'test-vm1'):
+                content = si.RetrieveContent()
+                vm = get_obj(content, [vim.VirtualMachine], event.vm.name)
 
-            msg = "Migrating %s to destination host %s" %  (event.vm.name, target_name)
+                target_name = 'esx2.test.kr'
+                destination_host = get_obj(content, [vim.HostSystem], target_name)
+                managed_entity = get_obj(content, [vim.ManagedEntity], target_name)
+                resource_pool = vm.resourcePool
+                migrate_priority = vim.VirtualMachine.MovePriority.defaultPriority
+
+                msg = "Migrating %s to destination host %s" %  (event.vm.name, target_name)
+                print(msg)
+                task = vm.Migrate(pool=resource_pool, host=destination_host, priority=migrate_priority)
+                wait_for_task(task)
+
+                msg = "Power On %s On destination host %s" % (event.vm.name, target_name)
+                task = vm.PowerOn()
+                wait_for_task(task)
+
+        elif(type(event) == vim.event.VmPoweredOnEvent):
+            msg = "Powered On VM %s On Host %s" % (event.vm.name, event.host.name)
             print(msg)
-            task = vm.Migrate(pool=resource_pool, host=destination_host, priority=migrate_priority)
-            wait_for_task(task)
-
-            task = vm.PowerOn()
-            wait_for_task(task)
-
 
     except Exception as e:
         print(traceback.print_exc())
@@ -75,11 +93,15 @@ def wait_for_task(task):
 
 def main():
 #    args = setup_args()
+
+    read_csv_file()
+    print(targetList)
+
     si = get_connection()
 
     dc = si.content.rootFolder.childEntity[0]
 
-    ids = ['VmPoweredOffEvent']
+    ids = ['VmPoweredOnEvent', 'VmPoweredOffEvent']
     byTime = vim.event.EventFilterSpec.ByTime(beginTime=si.CurrentTime())
     byEntity = vim.event.EventFilterSpec.ByEntity(entity=dc, recursion='all')
     filterSpec = vim.event.EventFilterSpec(eventTypeId=ids, time=byTime, entity=byEntity)
