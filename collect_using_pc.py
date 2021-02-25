@@ -17,8 +17,6 @@ from pyVim.task import WaitForTask
 
 import psycopg2 as pg2
 
-__author__ = 'prziborowski'
-
 def event_callback(event):
 #   print("Event %s at %s" % (type(event), event.createdTime))
 #    print("%s" % event)
