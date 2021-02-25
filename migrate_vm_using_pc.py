@@ -8,17 +8,17 @@ import csv
 
 from pyVmomi import vim, vmodl
 from pyVim.connect import SmartConnectNoSSL
-import vmutils
 from pyVim.task import WaitForTask
 
 import psycopg2 as pg2
 
-targetList = None
-
-def read_csv_file():
+def read_csv_file(vm_name):
     try:
         with open('target_list.csv', mode='r') as csv_file:
-            targetList = csv.DictReader(csv_file)
+            reader = csv.DictReader(csv_file)
+            for row in reader:
+                if(row['tobe_vm'] == vm_name):
+                    return row['tobe_host']
 
     except Exception as e:
         print(traceback.print_exc())
@@ -37,14 +37,20 @@ def event_callback(event):
         #print(event)
         si = get_connection()
 
-        print(type(event))
+        #print(type(event))
 
         if(type(event) == vim.event.VmPoweredOffEvent):
-            if(event.vm.name == 'test-vm1'):
+            # if(event.vm.name == 'test-vm1'):
+            msg = "Powered Off VM %s On Host %s" % (event.vm.name, event.host.name)
+            print(msg)
+
+            target_name = read_csv_file(event.vm.name)
+            print(target_name)
+            if target_name is not None:
                 content = si.RetrieveContent()
                 vm = get_obj(content, [vim.VirtualMachine], event.vm.name)
 
-                target_name = 'esx2.test.kr'
+                #target_name = 'esx1.test.kr'
                 destination_host = get_obj(content, [vim.HostSystem], target_name)
                 managed_entity = get_obj(content, [vim.ManagedEntity], target_name)
                 resource_pool = vm.resourcePool
@@ -53,11 +59,11 @@ def event_callback(event):
                 msg = "Migrating %s to destination host %s" %  (event.vm.name, target_name)
                 print(msg)
                 task = vm.Migrate(pool=resource_pool, host=destination_host, priority=migrate_priority)
-                wait_for_task(task)
+                WaitForTask(task)
 
                 msg = "Power On %s On destination host %s" % (event.vm.name, target_name)
                 task = vm.PowerOn()
-                wait_for_task(task)
+                WaitForTask(task)
 
         elif(type(event) == vim.event.VmPoweredOnEvent):
             msg = "Powered On VM %s On Host %s" % (event.vm.name, event.host.name)
@@ -93,9 +99,6 @@ def wait_for_task(task):
 
 def main():
 #    args = setup_args()
-
-    read_csv_file()
-    print(targetList)
 
     si = get_connection()
 
