@@ -7,31 +7,79 @@ import traceback
 
 from pyVmomi import vim, vmodl
 from pyVim.connect import SmartConnectNoSSL
+import vmutils
 from pyVim.task import WaitForTask
 
 import psycopg2 as pg2
 
-def event_callback(event):
-#   print("Event %s at %s" % (type(event), event.createdTime))
-#    print("%s" % event)
-    print("%s,%s,%s" % (event._wsdlName,event.createdTime,event.fullFormattedMessage))
-
-    try:
-      print("Test)
-
-    except Exception as e:
-      print(traceback.print_exc())
-
-def main():
-#    args = setup_args()
+def get_connection():
     si = SmartConnectNoSSL(host="vcenter.test.kr",
                            user="administrator@vsphere.local",
                            pwd="Password12#$",
                            port=443)
 
+    return si
+
+def event_callback(event):
+    try:
+        #print("%s,%s,%s" % (event._wsdlName, event.createdTime, event.fullFormattedMessage))
+        #print(event)
+        si = get_connection()
+
+        if(event.vm.name == 'test-vm1'):
+            content = si.RetrieveContent()
+            vm = get_obj(content, [vim.VirtualMachine], event.vm.name)
+
+            target_name = 'esx2.test.kr'
+            destination_host = get_obj(content, [vim.HostSystem], target_name)
+            managed_entity = get_obj(content, [vim.ManagedEntity], target_name)
+            resource_pool = managed_entity.resourcePool
+            migrate_priority = vim.VirtualMachine.MovePriority.defaultPriority
+
+            msg = "Migrating %s to destination host %s" %  (event.vm.name, target_name)
+            print(msg)
+            task = vm.Migrate(pool=resource_pool, host=destination_host, priority=migrate_priority)
+            wait_for_task(task)
+
+            task = vm.PowerOn()
+            wait_for_task(task)
+
+
+    except Exception as e:
+        print(traceback.print_exc())
+
+
+def get_obj(content, vimtype, name):
+    """
+     Get the vsphere object associated with a given text name
+    """
+    obj = None
+    container = content.viewManager.CreateContainerView(content.rootFolder, vimtype, True)
+    for c in container.view:
+        if c.name == name:
+            obj = c
+            break
+    return obj
+
+
+def wait_for_task(task):
+    """ wait for a vCenter task to finish """
+    task_done = False
+    while not task_done:
+        if task.info.state == 'success':
+            return task.info.result
+
+        if task.info.state == 'error':
+            print("there was an error")
+            task_done = True
+
+def main():
+#    args = setup_args()
+    si = get_connection()
+
     dc = si.content.rootFolder.childEntity[0]
 
-    ids = []
+    ids = ['VmPoweredOffEvent']
     byTime = vim.event.EventFilterSpec.ByTime(beginTime=si.CurrentTime())
     byEntity = vim.event.EventFilterSpec.ByEntity(entity=dc, recursion='all')
     filterSpec = vim.event.EventFilterSpec(eventTypeId=ids, time=byTime, entity=byEntity)
