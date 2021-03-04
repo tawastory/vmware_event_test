@@ -53,8 +53,9 @@ def event_callback(event):
                 #target_name = 'esx1.test.kr'
                 destination_host = get_obj(content, [vim.HostSystem], target_name)
                 managed_entity = get_obj(content, [vim.ManagedEntity], target_name)
-                resource_pool = vm.resourcePool
+                resource_pool = destination_host.parent.resourcePool
                 migrate_priority = vim.VirtualMachine.MovePriority.defaultPriority
+
 
                 msg = "Migrating %s to destination host %s" %  (event.vm.name, target_name)
                 print(msg)
